@@ -4,8 +4,11 @@ from pathlib import Path
 K3 = Path(__file__).resolve().parent.parent / "iscandar"
 sys.path.insert(0, str(K3))
 
-from MPUPointer import MPUPointer
-from allocator  import Engine
+from MPUPointer     import MPUPointer
+from allocator      import Engine
+from Status         import Status
+from BeamCoordinate import BeamCoordinate
+from CPUPointer     import CPUPointer
 
 
 
@@ -42,6 +45,18 @@ class Beam:
     return engine (request)
 
 
+  def transform (self, pointer, cube):
+
+    'k=3 pointer from an engine, with its accepting cube, becomes k=4'
+
+    coordinate         = pointer.coordinate ()
+
+    beam_coordinate    = BeamCoordinate (cube, coordinate.sector,
+                                         coordinate.row, coordinate.plane)
+
+    return CPUPointer (beam_coordinate, pointer.count)
+
+
   def allocate  (self, request):
 
     'allocation loop for modelling, should be inline later'
@@ -54,7 +69,24 @@ class Beam:
 
       if (isinstance (result, MPUPointer)):
         self.count_overall += request
-        return result
+        return self.transform (result, self.lead)
       
       self.rotate ()
+
+
+  def free      (self, pointer):
+
+    'deallocate a k=4 pointer in the cube it was born in'
+
+    coordinate         = pointer.coordinate ()
+    cube               = coordinate.cube
+    local              = MPUPointer.load_coordinate (coordinate.k3 (),
+                                                     pointer.count)
+
+    status             = self.engines [cube].unmark (local)
+
+    if (status == Status.GEAR_SUCCESS):
+      self.count_overall -= pointer.count
+
+    return status
 
