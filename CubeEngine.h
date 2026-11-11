@@ -1,43 +1,57 @@
 /* CubeEngine.h -- the per-cube engine boundary for Beam.c.
  *
- * ======================= STUB BOUNDARY =======================
- * Beam.py drives the k=3 Engine (allocator.py) directly. The
- * full k=3 C engine is not yet present in this repository, so
- * this header declares the minimal interface Beam needs, and
- * CubeEngine.c supplies a STUB implementation behind it:
+ * ==================== REAL ENGINE BOUNDARY ====================
+ * Beam.py drives the k=3 Engine (allocator.py) directly, one
+ * Engine instance per cube. This header declares the minimal
+ * interface Beam needs, and CubeEngine.c supplies an ADAPTER
+ * behind it: each CubeEngine holds one real k=3 C Engine
+ * (iscandar-engine, Engine.h), and the functions below reduce
+ * its three return shapes to the CubeEngineResult Beam.c
+ * observes.
  *
- *   - a 1024-word bitmap store (sector s is bit s, the Cube
- *     store's own convention), standing in for the k=3 Cube;
- *   - allocation by a first-fit contiguous-run search over that
- *     bitmap, standing in for the modes' probe searches;
- *   - mark/unmark with the k=3 commit path's check-then-set
- *     semantics (Commit.c): a flip that would land on wrongly
- *     set bits is K4_FAIL_OVERLAY and changes nothing.
- *
- * The stub keeps the Engine's boundary contract exactly, since
- * that is what Beam observes:
- *   - a request larger than the sectors remaining returns
- *     K4_FAIL before any search (Engine.__call__ step 1);
+ * The adapter keeps the Engine's boundary contract exactly,
+ * since that is what Beam observes:
+ *   - a request larger than the sectors remaining returns a
+ *     FAIL status before any search (Engine.__call__ step 1,
+ *     inside engine_call);
  *   - a zero request yields no result (the Nothing mode);
+ *   - a negative request yields no result: the Python Engine
+ *     returns None there (the Nothing fallback for an
+ *     out-of-table key), and the C engine_call, which takes
+ *     uint32_t, cannot express the case, so the adapter
+ *     answers it directly, with no engine call and no gear
+ *     interaction, exactly as the Python's None path has none;
  *   - allocate yields a (start, count) pointer result, a bare
  *     status, or nothing -- the three shapes Engine.__call__
  *     can return (MPUPointer, status int, None);
- *   - unmark refuses a block running past the cube end with
- *     K4_FAIL at the boundary, and otherwise returns the commit
- *     status (K4_GEAR_SUCCESS / K4_FAIL_OVERLAY).
+ *   - unmark returns the k=3 engine's own status for the
+ *     (start, count) block (GEAR_SUCCESS / FAIL_OVERLAY /
+ *     FAIL), mapped value-for-value (see CubeEngine.c).
  *
- * Placement inside the cube is the stub's own (first fit), NOT
- * the modes' probe placement. When the k=3 C engine lands, it
- * replaces CubeEngine.c behind this header; Beam.c does not
- * change. The test oracle (gen_k4_expected.py) substitutes the
- * identical stub policy on the Python side, so the Beam test
- * compares Beam logic against Beam logic, engine for engine.
+ * Placement inside the cube is the real modes' probe
+ * placement, no longer a stub's first fit. The test oracle
+ * (gen_k4_expected.py) drives the real Python Beam over the
+ * real Python k=3 engine, so the Beam test now compares Beam
+ * plus engine against Beam plus engine.
+ *
+ * INTERFACE CHANGE FROM THE STUB ERA, flagged per the work
+ * order: the function signatures and CubeEngineResult are
+ * unchanged, and Beam.c is unchanged. The CubeEngine struct
+ * changed: the stub's bitmap store is gone, replaced by the
+ * real Engine it adapts, plus the count_overall mirror
+ * Beam.c's scan reads (kept in step by the adapter after
+ * every call and unmark). This header now includes the k=3
+ * engine's Engine.h, so compiling anything that includes
+ * this header needs the engine directory on the include
+ * path (run_k4_c_tests.sh supplies it).
  * ============================================================= */
 
 #ifndef ISCANDAR_K4_CUBE_ENGINE_H
 #define ISCANDAR_K4_CUBE_ENGINE_H
 
 #include <stdint.h>
+
+#include "Engine.h"
 
 #define K4_SECTORS_PER_CUBE 32768u
 
@@ -54,8 +68,9 @@ typedef struct {
 } CubeEngineResult;
 
 typedef struct {
-    uint32_t words[1024];    /* stub store: sector s is bit s */
-    uint32_t count_overall;  /* Engine.count_overall */
+    Engine engine;           /* the real k=3 C Engine for this cube */
+    uint32_t count_overall;  /* mirror of engine.count_overall,
+                                the field Beam.c's scan reads */
 } CubeEngine;
 
 void cube_engine_init(CubeEngine *engine);
@@ -65,7 +80,8 @@ void cube_engine_call(CubeEngine *engine, int32_t request,
                       CubeEngineResult *out);
 
 /* Engine.unmark(pointer) reduced to (start, count): returns
- * K4_GEAR_SUCCESS, K4_FAIL, or K4_FAIL_OVERLAY. */
+ * GEAR_SUCCESS, FAIL, or FAIL_OVERLAY (the K4 names for the
+ * same Status.py values). */
 int32_t cube_engine_unmark(CubeEngine *engine, uint32_t start,
                            uint32_t count);
 

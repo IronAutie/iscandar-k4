@@ -7,14 +7,12 @@ and writes the transcript to test_k4_expected.txt. The C driver
 (test_k4.c) runs the identical script and its output is diffed
 against this file; the diff must be empty.
 
-The one substitution, made on BOTH sides identically: Beam.py's
-per-cube Engine is replaced by StubEngine below, a test double
-with a precisely specified first-fit bitmap policy, because the
-k=3 engine's probe placement is not what this test compares --
-Beam's own logic is. StubEngine mirrors, policy for policy, the
-C stub in CubeEngine.c, and keeps the Engine boundary contract
-Beam observes (overall gate first, Nothing for a zero request,
-check-then-set unmark). See CubeEngine.h for the boundary.
+No substitution is made on either side: Beam.py runs as it
+stands, with one real Python k=3 Engine (allocator.py) per
+cube, and the C driver runs Beam.c over the real k=3 C engine
+behind the CubeEngine adapter. The transcript therefore
+admits Beam plus engine together, placements included. See
+CubeEngine.h for the boundary.
 
 Layout note: Beam.py locates the k=3 engine at ../iscandar,
 which on this machine does not resolve (the engine lives in
@@ -32,58 +30,8 @@ sys.path.insert(0, str(HERE))
 
 from BeamCoordinate import BeamCoordinate
 from CPUPointer import CPUPointer
-from MPUPointer import MPUPointer, MOTOROLA, INTEL
-from Status import Status
+from MPUPointer import MOTOROLA, INTEL
 import Beam as BeamModule
-
-
-class StubEngine:
-    """First-fit bitmap engine, twin of CubeEngine.c's stub."""
-
-    SECTORS_PER_CUBE = 32768
-
-    def __init__(self):
-        self.bits = 0
-        self.count_overall = 0
-
-    def __call__(self, request):
-        if request > self.SECTORS_PER_CUBE - self.count_overall:
-            return Status.FAIL
-        if request == 0:
-            return None
-        if request < 0:
-            return Status.FAIL
-        run = 0
-        start = 0
-        found = None
-        for d in range(self.SECTORS_PER_CUBE):
-            if (self.bits >> d) & 1:
-                run = 0
-                start = d + 1
-            else:
-                run += 1
-                if run == request:
-                    found = start
-                    break
-        if found is None:
-            return Status.GEAR_EXHAUST
-        self.bits |= ((1 << request) - 1) << found
-        self.count_overall += request
-        return MPUPointer.load(found, request)
-
-    def unmark(self, pointer):
-        start, count = pointer.start, pointer.count
-        if start + count > self.SECTORS_PER_CUBE:
-            return Status.FAIL
-        mask = ((1 << count) - 1) << start
-        if self.bits & mask != mask:
-            return Status.FAIL_OVERLAY
-        self.bits &= ~mask
-        self.count_overall -= count
-        return Status.GEAR_SUCCESS
-
-
-BeamModule.Engine = StubEngine
 
 ORDERS = [MOTOROLA, INTEL]
 lines = []

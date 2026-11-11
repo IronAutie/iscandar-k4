@@ -2,8 +2,10 @@
  *
  * Runs the identical operation script as gen_k4_expected.py
  * (the Python oracle) and prints the identical transcript.
- * The outputs are diffed; the diff must be empty. See
- * CubeEngine.h for the stub boundary both sides share. */
+ * The outputs are diffed; the diff must be empty. Both sides
+ * run the real k=3 engine per cube: the Python oracle through
+ * Beam.py, this driver through the CubeEngine adapter. See
+ * CubeEngine.h for the boundary. */
 
 #include <stdio.h>
 

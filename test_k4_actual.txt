@@ -30,12 +30,12 @@ ADOPT 3 word=0x0000000000000001 v=0 r=0 start=0 count=2 coord=(0,0,0,0) iv=1 ir=
 ADOPT 4 word=0xDEADBEEF12345678 v=1 r=1 start=1037968488 count=22137 coord=(31676,8,3,9) iv=0 ir=0 istart=937288262 icount=28503
 BEAMINIT 0 arg=2 card=2 supported=65536
 BM0 A req=100 -> 0x8000000000000063 overall=100 lead=0
-BM0 A req=100 -> 0x8000000000320063 overall=200 lead=0
-BM0 A req=200 -> 0x80000000006400C7 overall=400 lead=0
+BM0 A req=100 -> 0x80000000003E0063 overall=200 lead=0
+BM0 A req=200 -> 0x80000000007000C7 overall=400 lead=0
 BM0 F #1 -> status=8 overall=300 lead=0
 BM0 A req=50 -> 0x8000000000320031 overall=350 lead=0
 BM0 A req=32768 -> 0x8000000040007FFF overall=33118 lead=1
-BM0 A req=1 -> 0x80000000004B0000 overall=33119 lead=0
+BM0 A req=1 -> 0x80000000004F8000 overall=33119 lead=0
 BM0 F #4 -> status=8 overall=351 lead=0
 BM0 F #4 -> status=4 overall=351 lead=0
 BM0 A req=40000 -> NONE overall=351 lead=0

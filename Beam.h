@@ -8,8 +8,8 @@
  * scanning, the first-acceptance walk, the count bookkeeping,
  * and the transform of an accepting engine's k=3 pointer into a
  * k=4 CPUPointer -- is transcribed in full from Beam.py. The
- * per-cube engines sit behind the stub boundary in
- * CubeEngine.h.
+ * per-cube engines sit behind the adapter boundary in
+ * CubeEngine.h (one real k=3 C Engine per cube).
  *
  * Settled shape: a Beam runs 1 to 32 engines. The Python clamps
  * a non-positive cardinality to 1; the C does the same, and

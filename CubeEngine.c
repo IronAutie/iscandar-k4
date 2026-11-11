@@ -1,107 +1,103 @@
-/* CubeEngine.c -- the STUB per-cube engine. See CubeEngine.h
- * for the boundary this file stands behind, and for what is
- * stubbed (placement) versus kept (the boundary contract). */
+/* CubeEngine.c -- the per-cube engine ADAPTER. See
+ * CubeEngine.h for the boundary this file stands behind.
+ *
+ * Each CubeEngine holds one real k=3 C Engine. Allocation is
+ * engine_call; the free path rebuilds the MPUPointer word
+ * from the (start, count) Beam.c hands down (the word
+ * MPUPointer.load_coordinate would mint for that block in
+ * Beam.py's free, reduced to its fields) and calls
+ * engine_unmark with it.
+ *
+ * Status mapping: the k=3 C status.h and K4Status.h both
+ * transcribe the one canonical Status.py, so a status crosses
+ * this boundary by value, unchanged. The statuses the free
+ * path can produce are exactly the K4 subset (GEAR_SUCCESS,
+ * FAIL_OVERLAY, FAIL); the named cases below pin that
+ * correspondence, and any other value (a mode's own failure
+ * on the allocate path, where Beam observes only that no
+ * pointer came back) passes through as the very int the
+ * Python Engine would have returned. */
 
 #include "CubeEngine.h"
 #include "K4Status.h"
 
-#include <string.h>
+#include "MPUPointer.h"
+#include "status.h"
+
+static int32_t cube_engine_map_status(int32_t status)
+{
+    switch (status) {
+    case GEAR_SUCCESS:
+        return K4_GEAR_SUCCESS;
+    case FAIL_OVERLAY:
+        return K4_FAIL_OVERLAY;
+    case FAIL:
+        return K4_FAIL;
+    default:
+        return status;
+    }
+}
 
 void cube_engine_init(CubeEngine *engine)
 {
-    memset(engine->words, 0, sizeof(engine->words));
+    engine_init(&engine->engine);
     engine->count_overall = 0;
-}
-
-static int stub_bit(const CubeEngine *engine, uint32_t sector)
-{
-    return (int)((engine->words[sector / 32u] >> (sector % 32u)) & 1u);
 }
 
 void cube_engine_call(CubeEngine *engine, int32_t request,
                       CubeEngineResult *out)
 {
-    uint32_t want;
-    uint32_t run_start;
-    uint32_t run_length;
-    uint32_t s;
+    EngineResult result;
 
-    /* Engine.__call__ step 1: the overall admissibility gate. */
-    if (request > 0
-        && (uint32_t)request > K4_SECTORS_PER_CUBE - engine->count_overall) {
-        out->kind = K4_ENGINE_STATUS;
-        out->status = K4_FAIL;
-        return;
-    }
-
-    /* The Nothing mode: a zero request searches to None. A
-     * negative request is outside every mode's table (the Error
-     * mode's search refuses it); either way Beam sees no
-     * pointer, which is all Beam can observe. */
-    if (request == 0) {
+    /* A negative request is out of every mode's table: the
+     * Python Engine returns None via the Nothing fallback,
+     * with no search and no gear interaction. The C
+     * engine_call takes uint32_t and cannot express the
+     * case (see Engine.h), so the adapter answers with the
+     * same shape directly. */
+    if (request < 0) {
         out->kind = K4_ENGINE_NONE;
         return;
     }
-    if (request < 0) {
+
+    engine_call(&engine->engine, (uint32_t)request, &result);
+    engine->count_overall = engine->engine.count_overall;
+
+    switch (result.outcome) {
+    case ENGINE_OUTCOME_POINTER:
+        out->kind = K4_ENGINE_POINTER;
+        out->start = mpupointer_start(result.word);
+        out->count = mpupointer_count(result.word);
+        break;
+    case ENGINE_OUTCOME_NONE:
+        out->kind = K4_ENGINE_NONE;
+        break;
+    default: /* ENGINE_OUTCOME_STATUS */
         out->kind = K4_ENGINE_STATUS;
-        out->status = K4_FAIL;
-        return;
+        out->status = cube_engine_map_status(result.status);
+        break;
     }
-
-    /* STUB PLACEMENT: first fit -- the lowest displacement whose
-     * contiguous free run reaches the request. */
-    want = (uint32_t)request;
-    run_start = 0;
-    run_length = 0;
-    for (s = 0; s < K4_SECTORS_PER_CUBE; s++) {
-        if (stub_bit(engine, s)) {
-            run_length = 0;
-            run_start = s + 1;
-        } else {
-            run_length++;
-            if (run_length == want) {
-                break;
-            }
-        }
-    }
-    if (run_length < want) {
-        out->kind = K4_ENGINE_STATUS;
-        out->status = K4_GEAR_EXHAUST;
-        return;
-    }
-
-    /* Mark the run (the bits are free by construction). */
-    for (s = run_start; s < run_start + want; s++) {
-        engine->words[s / 32u] |= (1u << (s % 32u));
-    }
-    engine->count_overall += want;
-
-    out->kind = K4_ENGINE_POINTER;
-    out->start = run_start;
-    out->count = want;
 }
 
 int32_t cube_engine_unmark(CubeEngine *engine, uint32_t start,
                            uint32_t count)
 {
-    uint32_t s;
+    uint32_t word;
+    int32_t status;
 
-    /* Engine.unmark's boundary guard, and the commit path's
-     * refusal of an empty block (Commit.c: count == 0). */
-    if (count == 0 || start + count > K4_SECTORS_PER_CUBE) {
+    /* Rebuild the pointer word for this block, born virtual
+     * as load_coordinate mints it. A refusal here (a count
+     * of 0, or a start past the last name -- neither can
+     * arise from a CPUPointer Beam.c holds) is the boundary
+     * refusal FAIL, the shape Engine.unmark's own boundary
+     * guard returns. */
+    status = mpupointer_load(start, count, 0, MPUPOINTER_MOTOROLA,
+                             &word);
+    if (status != SUCCESS) {
         return K4_FAIL;
     }
 
-    /* Check-then-set (Commit.c): every bit in the range must be
-     * marked, or nothing changes. */
-    for (s = start; s < start + count; s++) {
-        if (!stub_bit(engine, s)) {
-            return K4_FAIL_OVERLAY;
-        }
-    }
-    for (s = start; s < start + count; s++) {
-        engine->words[s / 32u] &= ~(1u << (s % 32u));
-    }
-    engine->count_overall -= count;
-    return K4_GEAR_SUCCESS;
+    status = engine_unmark(&engine->engine, word);
+    engine->count_overall = engine->engine.count_overall;
+    return cube_engine_map_status(status);
 }
