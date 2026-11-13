@@ -509,3 +509,7 @@ lifetimes of 756,086 matched pairs: median 7 microseconds;
 Andrew's framing: if locality holds, memory use should
 vanish shortly after held. It does, for the traffic; what
 remains is the furniture.
+
+Checked 2026-11-12: CONFIG_ATA_PIIX, CONFIG_BLK_DEV_SD, CONFIG_VIRTIO_BLK and
+CONFIG_EXT4_FS were re-read from Fubuki's own 6.12.107 build config on
+telesart and agree with the values above (=m).
