@@ -9,8 +9,10 @@ page allocations we trace and replay through Iscandar.
 Andrew decided QEMU hands the kernel in at boot. Preparing that
 surfaced a fact that refines how, not whether: Debian's stock kernel
 is modular. Checked directly in the config of the current trixie
-kernel (linux-image 6.12.113+deb13-amd64, read from the .deb on
-Muse's side): CONFIG_ATA_PIIX=m, CONFIG_BLK_DEV_SD=m,
+kernel (the stock trixie package config, linux-image
+6.12.113+deb13-amd64, read from the .deb on Muse's side;
+Fubuki's built kernel itself is 6.12.107+deb13-amd64,
+byte-checked 2026-11-12): CONFIG_ATA_PIIX=m, CONFIG_BLK_DEV_SD=m,
 CONFIG_VIRTIO_BLK=m, CONFIG_EXT4_FS=m. A modular kernel cannot mount
 any disk root filesystem until its initramfs loads those modules, and
 the initramfs is generated from the kernel package itself. So the
